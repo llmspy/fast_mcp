@@ -1,12 +1,18 @@
 import asyncio
 import json
 import os
+
+from aiohttp import web
+
 from pathlib import Path
 
 from fastmcp import Client
 from fastmcp.client import StdioTransport
 
 MCP_LOG_ERRORS = os.getenv("MCP_LOG_ERRORS", "0") == 1
+
+g_valid_servers = {}
+g_valid_servers_tools = {}
 
 def from_mcp_result(content):
     if hasattr(content, "model_dump"):
@@ -64,14 +70,9 @@ def create_tool_wrapper(ctx, tool_name, server_params):
     specific_tool_wrapper.__name__ = tool_name
     return specific_tool_wrapper
 
-
-def install(ctx):
-    pass
-
-
-def get_mcp_config(ctx):
+def read_mcp_config(ctx):
+    """Returns the original MCP config (without env var expansion)"""
     candidate_paths = []
-
     # return default prompts for all users if exists
     candidate_paths.append(os.path.join(ctx.get_user_path(), "fast_mcp", "mcp.json"))
     # otherwise return the default prompts from this repo
@@ -88,56 +89,83 @@ def get_mcp_config(ctx):
                     ctx.log(f"Failed to parse mcp.json at {path}: {e}")
                     continue
 
-                if "mcpServers" in ret:
-                    mcpServers = ret.get("mcpServers")
-                    valid_servers = {}
-
-                    for name, config in mcpServers.items():
-                        if "args" in config and isinstance(config["args"], list):
-                            new_args = []
-                            missing_env = False
-                            for arg in config["args"]:
-                                if isinstance(arg, str) and arg.startswith("$"):
-                                    env_var = arg[1:]
-                                    env_val = os.getenv(env_var)
-                                    if env_val is None:
-                                        ctx.dbg(
-                                            f"Environment variable {env_var} not found for server {name}, removing server config"
-                                        )
-                                        missing_env = True
-                                        break
-                                    else:
-                                        new_args.append(env_val)
-                                else:
-                                    new_args.append(arg)
-                            if not missing_env:
-                                config["args"] = new_args
-
-                        if "env" in config and isinstance(config["env"], dict):
-                            new_env = {}
-                            for key, val in config["env"].items():
-                                if val.startswith("$"):
-                                    env_var = val[1:]
-                                    env_val = os.getenv(env_var)
-                                    if env_val is None:
-                                        ctx.dbg(
-                                            f"Environment variable {env_var} not found for server {name}, removing server config"
-                                        )
-                                        missing_env = True
-                                        break
-                                    else:
-                                        new_env[key] = env_val
-                                else:
-                                    new_env[key] = val
-                            if not missing_env:
-                                config["env"] = new_env
-
-                        if not missing_env:
-                            valid_servers[name] = config
-
-                    ret["mcpServers"] = valid_servers
                 return ret
     return {"mcpServers": {}}
+
+def get_missing_env_vars(server_conf):
+    missing_vars = set()
+    # Check args for env var references
+    args = server_conf.get("args", [])
+    for arg in args:
+        if isinstance(arg, str) and arg.startswith("$"):
+            env_var = arg[1:]
+            if os.getenv(env_var) is None:
+                missing_vars.add(env_var)
+
+    # Check env for env var references
+    env = server_conf.get("env", {})
+    for key, val in env.items():
+        if isinstance(val, str) and val.startswith("$"):
+            env_var = val[1:]
+            if os.getenv(env_var) is None:
+                missing_vars.add(env_var)
+
+    return list(missing_vars)
+
+def get_mcp_config(ctx):
+    ret = read_mcp_config(ctx)
+    if "mcpServers" in ret:
+        mcpServers = ret.get("mcpServers")
+        valid_servers = {}
+
+        for name, config in mcpServers.items():
+            if "args" in config and isinstance(config["args"], list):
+                new_args = []
+                missing_env = False
+                for arg in config["args"]:
+                    if isinstance(arg, str) and arg.startswith("$"):
+                        env_var = arg[1:]
+                        env_val = os.getenv(env_var)
+                        if env_val is None:
+                            ctx.dbg(
+                                f"Environment variable {env_var} not found for server {name}, removing server config"
+                            )
+                            missing_env = True
+                            break
+                        else:
+                            new_args.append(env_val)
+                    else:
+                        new_args.append(arg)
+                if not missing_env:
+                    config["args"] = new_args
+
+            if "env" in config and isinstance(config["env"], dict):
+                new_env = {}
+                for key, val in config["env"].items():
+                    if val.startswith("$"):
+                        env_var = val[1:]
+                        env_val = os.getenv(env_var)
+                        if env_val is None:
+                            ctx.dbg(
+                                f"Environment variable {env_var} not found for server {name}, removing server config"
+                            )
+                            missing_env = True
+                            break
+                        else:
+                            new_env[key] = env_val
+                    else:
+                        new_env[key] = val
+                if not missing_env:
+                    config["env"] = new_env
+
+            if not missing_env:
+                valid_servers[name] = config
+
+        ret["mcpServers"] = valid_servers
+        global g_valid_servers
+        g_valid_servers = valid_servers
+    return ret
+
 
 
 async def discover_server(ctx, name, server_conf):
@@ -172,6 +200,34 @@ async def discover_server(ctx, name, server_conf):
     except Exception as e:
         ctx.log(f"Error initializing MCP server {name}: {e}")
         return []
+
+
+def install(ctx):
+
+    async def get_info(request):
+        config = read_mcp_config(ctx)
+        ret = {
+            "configPath": os.path.join(ctx.get_user_path(), "fast_mcp", "mcp.json"),
+        }
+        if "mcpServers" in config:
+            # Filter to only include servers that are valid
+            filtered_servers = {
+                name: server_config
+                for name, server_config in config["mcpServers"].items()
+                if name in g_valid_servers
+            }
+            for name in filtered_servers:
+                filtered_servers[name]["tools"] = g_valid_servers_tools.get(name, [])
+            ret["mcpServers"] = filtered_servers
+            disabled_servers = {
+                name: { "missingEnvVars": get_missing_env_vars(server_config) }
+                for name, server_config in config["mcpServers"].items()
+                if name not in g_valid_servers
+            }
+            ret["disabledServers"] = disabled_servers
+        return web.json_response(ret)
+
+    ctx.add_get("info", get_info)
 
 
 async def load(ctx):
@@ -212,6 +268,10 @@ async def load(ctx):
             }
             wrapper = create_tool_wrapper(ctx, tool.name, server_params=server_params)
             ctx.register_tool(wrapper, tool_def, group=name)
+            
+            if name not in g_valid_servers_tools:
+                g_valid_servers_tools[name] = []
+            g_valid_servers_tools[name].append(tool.name)
 
 
 __install__ = install

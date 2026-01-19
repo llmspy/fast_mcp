@@ -10,6 +10,7 @@ from fastmcp import Client
 from fastmcp.client import StdioTransport
 
 MCP_LOG_ERRORS = os.getenv("MCP_LOG_ERRORS", "0") == 1
+MCP_TIMEOUT = float(os.getenv("MCP_TIMEOUT", "60.0"))
 
 g_valid_servers = {}
 g_valid_servers_tools = {}
@@ -64,7 +65,7 @@ def create_tool_wrapper(ctx, tool_name, server_params):
             )
             async with Client(transport=transport) as client:
                 ctx.dbg(f"client.call_tool('{tool_name}','{json.dumps(kwargs)}')")
-                result = await client.call_tool(tool_name, kwargs, timeout=30.0)
+                result = await client.call_tool(tool_name, kwargs, timeout=MCP_TIMEOUT)
 
                 if hasattr(result, "content"):
                     output = []

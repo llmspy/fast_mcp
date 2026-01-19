@@ -15,7 +15,7 @@ This extension brings [Model Context Protocol (MCP)](https://modelcontextprotoco
 
 The extension manages MCP servers via a `mcp.json` configuration file. It searches for this file in two locations (first match wins):
 
-1. **User Config**: `~/.config/llms/fast_mcp/mcp.json`
+1. **User Config**: `~/.llms/user/default/fast_mcp/mcp.json`
 2. **Default Config**: The `ui/mcp.json` file bundled with the extension.
 
 ### Server Configuration Options
@@ -30,7 +30,7 @@ Each server in `mcpServers` supports the following fields:
 
 ### Environment Variable Substitution
 
-To allow for flexible and shared configurations, you can reference environment variables using the `$` prefix in both `args` and `env` values:
+To allow for flexible and shared configurations, you can reference environment variables using the `$` prefix in both `args` and `env` values, e.g:
 
 - `$PWD` - Current working directory
 - `$GEMINI_API_KEY` - Any environment variable
@@ -72,11 +72,9 @@ To allow for flexible and shared configurations, you can reference environment v
             }
         },
         "gemini-gen": {
-            "command": "uv",
+            "description": "Gemini Image and Audio TTS generation",
+            "command": "uvx",
             "args": [
-                "run",
-                "--directory",
-                "/path/to/gemini-gen-mcp",
                 "gemini-gen-mcp"
             ],
             "env": {
@@ -101,10 +99,17 @@ To allow for flexible and shared configurations, you can reference environment v
 When a tool is invoked:
 
 1. A **fresh connection** is established to the appropriate MCP server
-2. The tool is executed with the provided arguments (30-second timeout)
+2. The tool is executed with the provided arguments (configurable timeout, default 60s)
 3. The connection is closed after execution
 
 This fresh-connection-per-execution approach ensures reliability and isolation between tool calls.
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_TIMEOUT` | `60.0` | Timeout in seconds for MCP tool execution |
+| `MCP_LOG_ERRORS` | `0` | Set to `1` to enable detailed stderr logging for tool execution |
 
 ## Troubleshooting
 
@@ -112,8 +117,12 @@ If tools are not appearing:
 
 - Check that the MCP server command is accessible in your `PATH`
 - Verify that all required environment variables are exported
-- Enable detailed error logging by setting `MCP_LOG_ERRORS=1`
+- Enable detailed error logging with `MCP_LOG_ERRORS=1`
 - Review the logs in the `logs/` directory for specific error messages
+
+If tools are timing out:
+
+- Increase the timeout with `MCP_TIMEOUT=120` (or higher value in seconds)
 
 ### Log Files
 

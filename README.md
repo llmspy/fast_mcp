@@ -22,11 +22,12 @@ The extension manages MCP servers via a `mcp.json` configuration file. It search
 
 Each server in `mcpServers` supports the following fields:
 
-| Field     | Type   | Required | Description |
-|-----------|--------|----------|-------------|
-| `command` | string | Yes      | The executable to run (e.g., `npx`, `uvx`, `uv`, `python`) |
-| `args`    | array  | No       | Command-line arguments passed to the command |
-| `env`     | object | No       | Environment variables to set for the server process |
+| Field         | Type   | Required | Description |
+|---------------|--------|----------|-------------|
+| `command`     | string | Yes      | The executable to run (e.g., `npx`, `uvx`, `uv`, `python`) |
+| `args`        | array  | No       | Command-line arguments passed to the command |
+| `env`         | object | No       | Environment variables to set for the server process |
+| `description` | string | No       | A human-readable description of the server |
 
 ### Environment Variable Substitution
 

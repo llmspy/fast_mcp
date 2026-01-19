@@ -14,6 +14,19 @@ MCP_LOG_ERRORS = os.getenv("MCP_LOG_ERRORS", "0") == 1
 g_valid_servers = {}
 g_valid_servers_tools = {}
 
+g_default_mcp_config = {
+    "mcpServers": {
+        "filesystem": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "$PWD"
+            ]
+        }
+    }
+}
+
 def from_mcp_result(content):
     if hasattr(content, "model_dump"):
         return content.model_dump()
@@ -228,6 +241,88 @@ def install(ctx):
         return web.json_response(ret)
 
     ctx.add_get("info", get_info)
+
+    async def add_mcp_server(request):
+        mcpServer = await request.json()
+        name = mcpServer.get("name")
+        command = mcpServer.get("command")
+
+        if not name:
+            raise Exception("Missing required field 'name'.")
+        if not command:
+            raise Exception("Missing required field 'command'.")
+
+        config_path = os.path.join(ctx.get_user_path(), "fast_mcp", "mcp.json")
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        if not os.path.exists(config_path):
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(g_default_mcp_config, f, indent=2)
+        
+        config = read_mcp_config(ctx)
+        mcp_servers = config.get("mcpServers", {})
+
+        if name in mcp_servers:
+            raise Exception(f"MCP server with name '{name}' already exists.")
+
+        new_mcp_server = mcpServer.copy()
+        del new_mcp_server["name"]
+        mcp_servers[name] = new_mcp_server
+        config["mcpServers"] = mcp_servers
+
+        # merge with existing config
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+
+        return web.json_response(config)
+    ctx.add_post("mcpServers", add_mcp_server)
+
+    async def update_mcp_server(request):
+        name = request.match_info.get("name")
+        mcpServer = await request.json()
+        command = mcpServer.get("command")
+
+        if not command:
+            raise Exception("Missing required field 'command'.")
+
+        config_path = os.path.join(ctx.get_user_path(), "fast_mcp", "mcp.json")
+        config = read_mcp_config(ctx)
+        mcp_servers = config.get("mcpServers", {})
+
+        if name not in mcp_servers:
+            raise Exception(f"MCP server with name '{name}' does not exist.")
+
+        updated_mcp_server = mcpServer.copy()
+        mcp_servers[name] = updated_mcp_server
+        config["mcpServers"] = mcp_servers
+
+        # merge with existing config
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+
+        return web.json_response(config)
+
+    ctx.add_put("mcpServers/{name}", update_mcp_server)
+
+    async def delete_mcp_server(request):
+        name = request.match_info.get("name")
+
+        config_path = os.path.join(ctx.get_user_path(), "fast_mcp", "mcp.json")
+        config = read_mcp_config(ctx)
+        mcp_servers = config.get("mcpServers", {})
+
+        if name not in mcp_servers:
+            raise Exception(f"MCP server with name '{name}' does not exist.")
+
+        del mcp_servers[name]
+        config["mcpServers"] = mcp_servers
+
+        # merge with existing config
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+
+        return web.json_response(config)
+
+    ctx.add_delete("mcpServers/{name}", delete_mcp_server)
 
 
 async def load(ctx):

@@ -20,13 +20,14 @@ The extension manages MCP servers via a `mcp.json` configuration file. It search
 
 ### Server Configuration Options
 
-Each server in `mcpServers` supports the following fields:
+Each server in `mcpServers` supports the [mcp_config fields](https://gofastmcp.com/python-sdk/fastmcp-mcp_config):
 
 | Field         | Type   | Required | Description |
 |---------------|--------|----------|-------------|
 | `command`     | string | Yes      | The executable to run (e.g., `npx`, `uvx`, `uv`, `python`) |
 | `args`        | array  | No       | Command-line arguments passed to the command |
 | `env`         | object | No       | Environment variables to set for the server process |
+| `timeout`     | number | No       | Timeout in seconds for tool execution |
 | `description` | string | No       | A human-readable description of the server |
 
 ### Environment Variable Substitution

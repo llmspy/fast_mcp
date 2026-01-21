@@ -325,10 +325,11 @@ const McpToolPageHeader = {
                             <div v-if="config.tools?.length" class="flex items-start gap-2">
                                 <span class="text-gray-500 dark:text-gray-400 w-16 flex-shrink-0">Tools:</span>
                                 <div class="flex flex-wrap gap-1">
-                                    <span
+                                    <span @click="$ctx.tools?.selectTool({ group:name, tool })"
                                         v-for="tool in config.tools"
                                         :key="tool"
-                                        class="font-mono text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 px-1.5 py-0.5 rounded"
+                                        class="font-mono px-1.5 py-0.5 rounded"
+                                        :class="$ctx.tools?.selectedTool === tool ? 'font-semibold cursor-default text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50' : 'cursor-pointer  text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700'"
                                     >{{ tool }}</span>
                                 </div>
                             </div>

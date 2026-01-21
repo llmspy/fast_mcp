@@ -1,11 +1,9 @@
 import asyncio
 import json
 import os
-
-from aiohttp import web
-
 from pathlib import Path
 
+from aiohttp import web
 from fastmcp import Client
 from fastmcp.client import StdioTransport
 
@@ -16,17 +14,9 @@ g_valid_servers = {}
 g_valid_servers_tools = {}
 
 g_default_mcp_config = {
-    "mcpServers": {
-        "filesystem": {
-            "command": "npx",
-            "args": [
-                "-y",
-                "@modelcontextprotocol/server-filesystem",
-                "$PWD"
-            ]
-        }
-    }
+    "mcpServers": {"filesystem": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "$PWD"]}}
 }
+
 
 def from_mcp_result(content):
     if hasattr(content, "model_dump"):
@@ -84,6 +74,7 @@ def create_tool_wrapper(ctx, tool_name, server_params):
     specific_tool_wrapper.__name__ = tool_name
     return specific_tool_wrapper
 
+
 def read_mcp_config(ctx):
     """Returns the original MCP config (without env var expansion)"""
     candidate_paths = []
@@ -106,6 +97,7 @@ def read_mcp_config(ctx):
                 return ret
     return {"mcpServers": {}}
 
+
 def get_missing_env_vars(server_conf):
     missing_vars = set()
     # Check args for env var references
@@ -125,6 +117,7 @@ def get_missing_env_vars(server_conf):
                 missing_vars.add(env_var)
 
     return list(missing_vars)
+
 
 def get_mcp_config(ctx):
     ret = read_mcp_config(ctx)
@@ -181,7 +174,6 @@ def get_mcp_config(ctx):
     return ret
 
 
-
 async def discover_server(ctx, name, server_conf):
     """
     Discover tools from a single MCP server.
@@ -217,7 +209,6 @@ async def discover_server(ctx, name, server_conf):
 
 
 def install(ctx):
-
     async def get_info(request):
         config = read_mcp_config(ctx)
         ret = {
@@ -226,15 +217,13 @@ def install(ctx):
         if "mcpServers" in config:
             # Filter to only include servers that are valid
             filtered_servers = {
-                name: server_config
-                for name, server_config in config["mcpServers"].items()
-                if name in g_valid_servers
+                name: server_config for name, server_config in config["mcpServers"].items() if name in g_valid_servers
             }
             for name in filtered_servers:
                 filtered_servers[name]["tools"] = g_valid_servers_tools.get(name, [])
             ret["mcpServers"] = filtered_servers
             disabled_servers = {
-                name: { "missingEnvVars": get_missing_env_vars(server_config) }
+                name: {"missingEnvVars": get_missing_env_vars(server_config)}
                 for name, server_config in config["mcpServers"].items()
                 if name not in g_valid_servers
             }
@@ -258,7 +247,7 @@ def install(ctx):
         if not os.path.exists(config_path):
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(g_default_mcp_config, f, indent=2)
-        
+
         config = read_mcp_config(ctx)
         mcp_servers = config.get("mcpServers", {})
 
@@ -275,6 +264,7 @@ def install(ctx):
             json.dump(config, f, indent=2)
 
         return web.json_response(config)
+
     ctx.add_post("mcpServers", add_mcp_server)
 
     async def update_mcp_server(request):
@@ -344,10 +334,7 @@ async def load(ctx):
     server_names = list(mcp_config["mcpServers"].keys())
 
     # Run all server discoveries in parallel
-    tasks = [
-        discover_server(ctx, name, mcp_config["mcpServers"][name])
-        for name in server_names
-    ]
+    tasks = [discover_server(ctx, name, mcp_config["mcpServers"][name]) for name in server_names]
     results = await asyncio.gather(*tasks)
 
     # Register tools in config order for deterministic behavior
@@ -364,7 +351,7 @@ async def load(ctx):
             }
             wrapper = create_tool_wrapper(ctx, tool.name, server_params=server_params)
             ctx.register_tool(wrapper, tool_def, group=name)
-            
+
             if name not in g_valid_servers_tools:
                 g_valid_servers_tools[name] = []
             g_valid_servers_tools[name].append(tool.name)

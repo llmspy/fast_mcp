@@ -5,7 +5,8 @@
             "args": [
                 "-y",
                 "@modelcontextprotocol/server-filesystem",
-                "$PWD"
+                "$PWD",
+                "$LLMS_HOME/.agent"
             ]
         }
     }

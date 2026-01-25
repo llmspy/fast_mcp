@@ -14,9 +14,8 @@ g_valid_servers = {}
 g_valid_servers_tools = {}
 
 g_default_mcp_config = {
-    "mcpServers": {"filesystem": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "$PWD"]}}
+    "mcpServers": {"filesystem": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "$PWD", "$LLMS_HOME/.agent"]}}
 }
-
 
 def from_mcp_result(content):
     if hasattr(content, "model_dump"):
@@ -105,7 +104,7 @@ def get_missing_env_vars(server_conf):
     for arg in args:
         if isinstance(arg, str) and arg.startswith("$"):
             env_var = arg[1:]
-            if os.getenv(env_var) is None:
+            if os.getenv(env_var) is None and not env_var.startswith("LLMS_HOME"):
                 missing_vars.add(env_var)
 
     # Check env for env var references
@@ -113,11 +112,26 @@ def get_missing_env_vars(server_conf):
     for key, val in env.items():
         if isinstance(val, str) and val.startswith("$"):
             env_var = val[1:]
-            if os.getenv(env_var) is None:
+            if os.getenv(env_var) is None and not env_var.startswith("LLMS_HOME"):
                 missing_vars.add(env_var)
 
     return list(missing_vars)
 
+def get_arg_value(ctx, arg, server_name):
+    if arg is None:
+        return None, None
+    if isinstance(arg, str) and arg.startswith("$"):
+        env_var = arg[1:]
+        env_val = os.getenv(env_var)
+        if not env_val and env_var.startswith("LLMS_HOME"):
+            # Special case: default LLMS_HOME to user path
+            env_val = arg.replace("$LLMS_HOME", ctx.get_home_path())
+        if env_val is None:
+            return None, f"Environment variable {env_var} not found for server {server_name}, removing server config"
+        else:
+            return env_val, None
+    else:
+        return arg, None
 
 def get_mcp_config(ctx):
     ret = read_mcp_config(ctx)
@@ -130,38 +144,24 @@ def get_mcp_config(ctx):
                 new_args = []
                 missing_env = False
                 for arg in config["args"]:
-                    if isinstance(arg, str) and arg.startswith("$"):
-                        env_var = arg[1:]
-                        env_val = os.getenv(env_var)
-                        if env_val is None:
-                            ctx.dbg(
-                                f"Environment variable {env_var} not found for server {name}, removing server config"
-                            )
-                            missing_env = True
-                            break
-                        else:
-                            new_args.append(env_val)
-                    else:
-                        new_args.append(arg)
+                    arg_val, error = get_arg_value(ctx, arg, server_name=name)
+                    if error:
+                        ctx.dbg(error)
+                        missing_env = True
+                        break
+                    new_args.append(arg_val)
                 if not missing_env:
                     config["args"] = new_args
 
             if "env" in config and isinstance(config["env"], dict):
                 new_env = {}
                 for key, val in config["env"].items():
-                    if val.startswith("$"):
-                        env_var = val[1:]
-                        env_val = os.getenv(env_var)
-                        if env_val is None:
-                            ctx.dbg(
-                                f"Environment variable {env_var} not found for server {name}, removing server config"
-                            )
-                            missing_env = True
-                            break
-                        else:
-                            new_env[key] = env_val
-                    else:
-                        new_env[key] = val
+                    arg_val, error = get_arg_value(ctx, val, server_name=name)
+                    if error:
+                        ctx.dbg(error)
+                        missing_env = True
+                        break
+                    new_env[key] = arg_val
                 if not missing_env:
                     config["env"] = new_env
 

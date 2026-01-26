@@ -44,14 +44,6 @@ To allow for flexible and shared configurations, you can reference environment v
 ```json
 {
     "mcpServers": {
-        "filesystem": {
-            "command": "npx",
-            "args": [
-                "-y",
-                "@modelcontextprotocol/server-filesystem",
-                "$PWD"
-            ]
-        },
         "git": {
             "command": "uvx",
             "args": [
@@ -82,6 +74,13 @@ To allow for flexible and shared configurations, you can reference environment v
             "env": {
                 "GEMINI_API_KEY": "$GEMINI_API_KEY"
             }
+        },
+        "omarchy": {
+            "description": "Manage Omarchy Desktop Themes",
+            "command": "uvx",
+            "args": [
+                "omarchy-mcp"
+            ]
         }
     }
 }

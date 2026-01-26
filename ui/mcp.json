@@ -1,12 +1,11 @@
 {
     "mcpServers": {
-        "filesystem": {
-            "command": "npx",
+        "git": {
+            "command": "uvx",
             "args": [
-                "-y",
-                "@modelcontextprotocol/server-filesystem",
-                "$PWD",
-                "$LLMS_HOME/.agent"
+                "mcp-server-git",
+                "--repository",
+                "$PWD"
             ]
         }
     }

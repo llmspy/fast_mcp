@@ -13,9 +13,8 @@ MCP_TIMEOUT = float(os.getenv("MCP_TIMEOUT", "60.0"))
 g_valid_servers = {}
 g_valid_servers_tools = {}
 
-g_default_mcp_config = {
-    "mcpServers": {"filesystem": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "$PWD", "$LLMS_HOME/.agent"]}}
-}
+g_default_mcp_config = {"mcpServers": {"git": {"command":"uvx", "args":["mcp-server-git","--repository","$PWD"]}}}
+
 
 def from_mcp_result(content):
     if hasattr(content, "model_dump"):
